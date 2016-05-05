@@ -45,7 +45,7 @@ cp /import/resolv.conf /etc/resolv.conf
 cp /opt/data/docker.service /lib/systemd/system/docker.service
 
 # setup docker remote api
-cp /opt/datal/docker-tcp.socket /etc/systemd/system/docker-tcp.socket
+cp /opt/data/docker-tcp.socket /etc/systemd/system/docker-tcp.socket
 systemctl enable docker-tcp.socket
 
 mkdir /etc/systemd/system/docker.service.d
