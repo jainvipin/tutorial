@@ -20,7 +20,7 @@ def ssh_exec_thread(ssh_object, command):
 
 # This class represents a vagrant node
 class Node:
-    def __init__(self, addr, username='vagrant', password='vagrant', binpath='/opt/gopath/bin'):
+    def __init__(self, addr, username='vagrant', password='vagrant', binpath='/opt/bin'):
         self.addr = addr
         self.username = username
         self.password = password
@@ -78,7 +78,7 @@ class Node:
     # Start netmaster process
     def startNetmaster(self):
         ssh_object = self.sshConnect(self.username, self.password)
-        command = "GOPATH=/opt/gopath " + self.binpath + "/netmaster > /tmp/netmaster.log 2>&1"
+        command = "GOPATH=/opt" + self.binpath + "/netmaster > /tmp/netmaster.log 2>&1"
         self.nmThread = threading.Thread(target=ssh_exec_thread, args=(ssh_object, command))
         # npThread.setDaemon(True)
         self.nmThread.start()

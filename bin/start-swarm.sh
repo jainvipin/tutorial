@@ -27,12 +27,12 @@ nohup /usr/bin/swarm join --advertise=$node_addr:2385 etcd://localhost:2379 > /t
 
 # echo "starting netplugin"
 # start netplugin
-# nohup /opt/gopath/bin/netplugin -native-integration=true > /tmp/netplugin.log 2>&1 &
+# nohup /opt/bin/netplugin -native-integration=true > /tmp/netplugin.log 2>&1 &
 
 if [[ $mode == "master" ]]; then
     # echo "starting netmaster"
     # start netmaster
-    # nohup /opt/gopath/bin/netmaster > /tmp/netmaster.log 2>&1 &
+    # nohup /opt/bin/netmaster > /tmp/netmaster.log 2>&1 &
 
     unset http_proxy
     unset https_proxy
