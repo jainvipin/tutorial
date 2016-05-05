@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo restarting services...
+cd $(GOPATH)/bin && PYTHONIOENCODING=utf-8 ./startPlugin.py -nodes ${CLUSTER_NODE_IPS}
+
