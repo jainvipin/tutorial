@@ -21,7 +21,7 @@ args = parser.parse_args()
 addrList = args.nodes.split(",")
 
 # Cleanup all state and start netplugin/netmaster
-testbed = api.tbed.Testbed(addrList, args.user, args.password, args.binpath)
+testbed = tbed.Testbed(addrList, args.user, args.password, args.binpath)
 
 print "Waiting for netmaster to come up"
 time.sleep(15)

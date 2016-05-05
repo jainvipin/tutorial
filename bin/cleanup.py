@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 # sanity tests
-import api.tnode
+import tnode
 import time
 import sys
 import argparse
@@ -22,7 +22,7 @@ nodes = []
 
 # Cleanup nodes
 for addr in addrList:
-	node = api.tnode.Node(addr, args.user, args.password)
+	node = tnode.Node(addr, args.user, args.password)
 	node.cleanupContainers()
 	nodes.append(node)
 
