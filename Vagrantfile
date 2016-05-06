@@ -3,7 +3,6 @@
 
 require 'fileutils'
 
-# netplugin_synced_gopath="/opt/golang"
 FileUtils.cp "/etc/resolv.conf", Dir.pwd
 
 $cluster_ip_nodes = ""
@@ -33,10 +32,16 @@ echo "export no_proxy=$7,127.0.0.1,localhost,netmaster" >> /etc/profile.d/envvar
 echo "export CLUSTER_NODE_IPS=$7" >> /etc/profile.d/envvar.sh
 source /etc/profile.d/envvar.sh
 
-wget -q https://github.com/contiv/netplugin/releases/download/v0.1-05-04-2016.22-46-43.UTC/netplugin-v0.1-05-04-2016.22-46-43.UTC.tar.bz2 -O /tmp/netplugin.tar.bz2
-bunzip2 /tmp/netplugin.tar.bz2
+wget -q https://github.com/contiv/netplugin/releases/download/v0.1-05-04-2016.22-46-43.UTC/netplugin-v0.1-05-04-2016.22-46-43.UTC.tar.bz2 -O /tmp/netplugin.bz2
 cd /opt/bin
-tar xvf /tmp/netplugin.tar
+tar xvjf /tmp/netplugin.bz2
+
+wget -q https://github.com/docker/compose/releases/download/1.5.2/docker-compose-Linux-x86_64 -O /opt/bin/docker-compose
+chmod +x /opt/bin/docker-compose
+
+wget -q https://cisco.box.com/shared/static/24q94bb94nz4wfnl20afwulffh3lcyt2.bz2 -O /tmp/contiv-compose.bz2
+cd /opt/bin
+tar xvjf /tmp/contiv-compose.bz2
 
 mv /etc/resolv.conf /etc/resolv.conf.bak
 cp /import/resolv.conf /etc/resolv.conf
@@ -175,5 +180,3 @@ SCRIPT
         end
     end
 end
-
-
