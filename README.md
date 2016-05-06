@@ -343,8 +343,8 @@ default
 blue     
 ```
 
-Now we can create network in tenant `blue` and have containers belong to the tenant. Here
-we chose the same subnet and network name for it.
+After the tenant is created, we can create network within in tenant `blue` and run containers.
+Here we chose the same subnet and network name for it.
 the same subnet and same network name, that we used before
 ```
 vagrant@tutorial-node1:~$ netctl net create -t blue --subnet=10.1.2.0/24 contiv-net
@@ -354,7 +354,7 @@ Tenant  Network     Nw Type  Encap type  Packet tag  Subnet       Gateway
 blue    contiv-net  data     vxlan       0           10.1.2.0/24  
 ```
 
-Now we can run containers belonging to this tenant
+Next, we can run containers belonging to this tenant
 ```
 vagrant@tutorial-node1:~$ docker run -itd --name=contiv-blue-c1 --net=contiv-net/blue alpine /bin/sh
 6c7d8c0b14ec6c2c9f52468faf50444e29c4b1fa61753b75c00f033564814515
@@ -371,6 +371,7 @@ ab353464b4e2        skynetservices/skydns:latest   "/skydns"           53 minute
 ```
 
 Let us run a couple of more containers in the host `tutorial-node2` that belong to the tenatn `blue`
+```
 vagrant@tutorial-node2:~$ docker run -itd --name=contiv-blue-c2 --net=contiv-net/blue alpine /bin/sh
 521abe19d6b5b3557de6ee4654cc504af0c497a64683f737ffb6f8238ddd6454
 vagrant@tutorial-node2:~$ docker run -itd --name=contiv-blue-c3 --net=contiv-net/blue alpine /bin/sh
@@ -439,7 +440,7 @@ round-trip min/avg/max = 1.637/1.637/1.637 ms
 
 ### Chapter 6: Connecting containers to external networks
 
-There are two ways to connect to the external networks:
+In this chapter, we explore ways to connect containers to the external networks
 
 #### 1. External Connectivity using Host NATing
 
