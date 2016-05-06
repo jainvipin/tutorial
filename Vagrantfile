@@ -1,10 +1,6 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-require 'fileutils'
-
-FileUtils.cp "/etc/resolv.conf", Dir.pwd
-
 $cluster_ip_nodes = ""
 
 provision_common = <<SCRIPT
@@ -78,6 +74,7 @@ SCRIPT
 
 VAGRANTFILE_API_VERSION = "2"
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+    config.ssh.password="vagrant"
     if ENV['CONTIV_NODE_OS'] && ENV['CONTIV_NODE_OS'] == "centos" then
         config.vm.box = "contiv/centos71-netplugin"
     else
