@@ -86,7 +86,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     node_ips = num_nodes.times.collect { |n| base_ip + "#{n+10}" }
     $cluster_ip_nodes = node_ips.join(",")
  
-    node_names = num_nodes.times.collect { |n| "netplugin-node#{n+1}" }
+    node_names = num_nodes.times.collect { |n| "tutorial-node#{n+1}" }
     node_peers = []
    
     num_nodes.times do |n|
