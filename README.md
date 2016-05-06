@@ -3,13 +3,13 @@
 Walks through container networking and concepts step by step
 
 ### Prerequisites 
-1. Download Vagrant [https://www.vagrantup.com/downloads.html]
-2. Download Virtualbox [https://www.virtualbox.org/wiki/Downloads]
+1. [Download Vagrant](https://www.vagrantup.com/downloads.html)
+2. [Download Virtualbox](https://www.virtualbox.org/wiki/Downloads)
 
 ### Setup
 1. Get the Vagrantfile
 ```
-$ wget https://raw.githubusercontent.com/contiv/jainvipin/tutorial/Vagrantfile
+$ curl https://raw.githubusercontent.com/jainvipin/tutorial/master/Vagrantfile -o Vagrantfile
 ```
 
 2. On `Microsoft Windows systems` create resolv.conf file in the current directory,
@@ -25,24 +25,28 @@ nameserver 173.36.131.10
 ```
 
 3. Start a small two-node cluster
-`$ vagrant up`
+```
+$ vagrant up
+```
 
 4. Log into one of the VMs, confirm all looks good
 ```
+$ vagrant ssh tutorial-node1
 vagrant@tutorial-node1:~$ docker ps
-vagrant@tutorial-node1:~$ netctl version
 vagrant@tutorial-node1:~$ etcdctl cluster-health
 vagrant@tutorial-node1:~$ ifconfig docker0
 vagrant@tutorial-node1:~$ ifconfig eth1
 vagrant@tutorial-node1:~$ ifconfig eth0
+vagrant@tutorial-node1:~$ netctl version
 ```
 In the above output, you'll see:
-- docker0 (172.17.0.1/16) is the linux bridge, created by docker daemon, that provides
-IP address to containers from this subnet.
-- eth1 is the interface that connects to external network (if needed)
-- eth0 is the management interface (on which we ssh into the VM)
+- `docker0` interface corresponds to the linux bridge and its associated
+subnet `172.17.0.1/16`. This is created by docker daemon automatically, and
+is the default network containers would belong to when an override network
+is not specified
+- `eth1` in this VM is the interface that connects to external network (if needed)
+- `eth0` is the management interface, on which we ssh into the VM
 
-From here on all the commands we execute are within the VM we ssh'ed into
 
 ### Chapter 1 - Dcoker's libnetwork - Container Network Model 
 
@@ -61,36 +65,40 @@ vagrant@tutorial-node1:~$ docker run -itd --name=vanilla-c alpine /bin/sh
  
 vagrant@tutorial-node1:~$ ifconfig 
 ```
-You will see that it has allocated one IP address from default docker 
-bridge (docker0), likely 172.17.0.3, for example
 
+You will see that it has a `virtual ethernet interface` that could look like `vethedba290`. More importantly it is allocated an IP address from default docker 
+bridge `docker0`, likely `172.17.0.3`, and can be examined using
 ```
 vagrant@tutorial-node1:~$ docker network inspect bridge
 vagrant@tutorial-node1:~$ docker inspect --format '{{.NetworkSettings.IPAddress}}' vanilla-c
 ```
 
-All traffic to/from this container is Port-NATed to the host's IP (on eth0).
-The Port NATing on the host is done using iptables, which can be seen using
+The other pair of veth interface is put into the container with the name `eth0`
 ```
-$ vagrant@tutorial-node1:~$ iptables -t nat -L -n
+vagrant@tutorial-node1:~$ docker exec -it vanilla-c /bin/sh
+/ # ifconfig eth0
+```
+
+All traffic to/from this container is Port-NATed to the host's IP (on eth0).
+The Port NATing on the host is done using iptables, which can be seen as a
+MASQUERADE rule for outbound traffic on all ports
+```
+$ vagrant@tutorial-node1:~$ sudo iptables -t nat -L -n
 ```
 
 #### Multi-host networking, using overlay driver
 
-Docker engine ahs a built in overlay driver that can be use to connect
+Docker engine has a built in overlay driver that can be use to connect
 containers across multiple nodes. 
-
 ```
 vagrant@tutorial-node1:~$ docker network create -d=overlay --subnet=10.1.1.0/24 overlay-net
 vagrant@tutorial-node1:~$ docker network inspect overlay-net
-
 vagrant@tutorial-node1:~$ docker run -itd --name=overlay-c1 --net=overlay-net alpine /bin/sh
-
 vagrant@tutorial-node1:~$ docker inspect --format '{{.NetworkSettings.IPAddress}}' overlay-c1
 ```
 
-Now, let's ssh into another node using `vagrant ssh tutorial-node2`, and spin up a 
-container on the second node
+Let's ssh into the second node using `vagrant ssh tutorial-node2`, and spin up a 
+new container on it
 ```
 vagrant@tutorial-node2:~$ docker run -itd --name=overlay-c2 --net=overlay-net alpine /bin/sh
 
