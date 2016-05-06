@@ -17,10 +17,14 @@ $ curl https://raw.githubusercontent.com/jainvipin/tutorial/master/Vagrantfile -
 100  6731  100  6731    0     0   8424      0 --:--:-- --:--:-- --:--:--  8424
 ```
 
-#### Step 2: On `Microsoft Windows systems` create resolv.conf file in the current directory,
-that would be needed by the VMs to access outside network. Ths next step will fail
-if this is not specified correctly. On `Mac` the Vagrant bringup automatically
-copies this file from `/etc/resolv.conf`
+Note: On Windows the file may be downloaded with `.txt` extension. Rename the file
+if needed to remove the extension. Some steps are
+documented [here](http://www.mediacollege.com/microsoft/windows/extension-change.html).
+
+#### Step 2: Create resolv.conf file in the current directory, where you have copied the Vagrantfile.
+This is used by the VMs to access outside network for downloading docker images in
+rest of tuorial. The next steps will fail if this is not specified correctly.
+On `Mac` or `Linux` based systems you may copy `/etc/resolv.conf` to current directory.
 ```
 $ cat resolv.conf
 domain foobar.com
@@ -48,6 +52,10 @@ vagrant@tutorial-node1:~$ ifconfig eth1
 vagrant@tutorial-node1:~$ ifconfig eth0
 vagrant@tutorial-node1:~$ netctl version
 ```
+
+**Note**:
+- On Windows, you will need a ssh client to be installed like putty, cygwin etc.
+- The username/password for the VMs is vagrant/vagrant
 
 In the above output, you'll see:
 - `docker0` interface corresponds to the linux bridge and its associated
@@ -231,7 +239,7 @@ fb822eda9916        alpine                         "/bin/sh"           3 minutes
 2cf083c0a4de        alpine                         "/bin/sh"           28 minutes ago      Up 28 minutes                           vanilla-c
 ab353464b4e2        skynetservices/skydns:latest   "/skydns"           33 minutes ago      Up 33 minutes       53/tcp, 53/udp      defaultdns
 
-vagrant@tutorial-node2:~$ docker exec -it overlay-c2 /bin/sh
+vagrant@tutorial-node1:~$ docker exec -it overlay-c2 /bin/sh
 / # ping overlay-c1
 PING overlay-c1 (10.1.1.2): 56 data bytes
 64 bytes from 10.1.1.2: seq=0 ttl=64 time=0.066 ms
