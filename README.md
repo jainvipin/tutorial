@@ -26,10 +26,15 @@ This is used by the VMs to access outside network for downloading docker images 
 rest of tuorial. The next steps will fail if this is not specified correctly.
 On `Mac` or `Linux` based systems you may copy `/etc/resolv.conf` to current directory.
 ```
+$ cp /etc/resolv.conf .
+
 $ cat resolv.conf
 domain foobar.com
 nameserver 171.70.168.183
 nameserver 173.36.131.10
+
+$ ls
+Vagrantfile	resolv.conf
 ```
 
 #### Step 3: Start a small two-node cluster
@@ -43,6 +48,11 @@ $
 ```
 
 #### Step 4: Log into one of the VMs, confirm all looks good
+
+**Note**:
+- On Windows, you will need a ssh client to be installed like putty, cygwin etc.
+- The username/password for the VMs is vagrant/vagrant
+
 ```
 $ vagrant ssh tutorial-node1
 vagrant@tutorial-node1:~$ docker info
@@ -56,13 +66,35 @@ vagrant@tutorial-node1:~$ etcdctl cluster-health
 
 ```
 vagrant@tutorial-node1:~$ ifconfig docker0
-vagrant@tutorial-node1:~$ ifconfig eth1
-vagrant@tutorial-node1:~$ ifconfig eth0
-```
+docker0   Link encap:Ethernet  HWaddr 02:42:fb:53:27:56  
+          inet addr:172.17.0.1  Bcast:0.0.0.0  Mask:255.255.0.0
+          inet6 addr: fe80::42:fbff:fe53:2756/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:3521 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:3512 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:178318 (178.3 KB)  TX bytes:226978 (226.9 KB)
 
-**Note**:
-- On Windows, you will need a ssh client to be installed like putty, cygwin etc.
-- The username/password for the VMs is vagrant/vagrant
+vagrant@tutorial-node1:~$ ifconfig eth1
+eth1      Link encap:Ethernet  HWaddr 08:00:27:f7:17:75  
+          inet addr:192.168.2.10  Bcast:0.0.0.0  Mask:255.255.255.0
+          inet6 addr: fe80::a00:27ff:fef7:1775/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:219585 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:272864 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:21413163 (21.4 MB)  TX bytes:28556948 (28.5 MB)
+
+vagrant@tutorial-node1:~$ ifconfig eth0
+eth0      Link encap:Ethernet  HWaddr 08:00:27:a2:bc:0d  
+          inet addr:10.0.2.15  Bcast:10.0.2.255  Mask:255.255.255.0
+          inet6 addr: fe80::a00:27ff:fea2:bc0d/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:28103 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:13491 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:36213596 (36.2 MB)  TX bytes:858264 (858.2 KB)
+```
 
 In the above output, you'll see:
 - `docker0` interface corresponds to the linux bridge and its associated
@@ -78,6 +110,11 @@ vagrant@tutorial-node1:~$ netctl version
 ```
 `netctl` is a utility to create, update, read and modify contiv objects. It is a CLI wrapper
 on top of REST interface.
+
+#### How to restart if VM is shut down, restarted or connectivity is lost
+It is okay to restart the tutorial from where you left at the beginning of the chapter.
+The recommended way is to cleanup the setup using `vagrant -f destroy`, and 
+then restarting them again using `vagrant up`
 
 
 ### Chapter 1 - Container Networking Models
@@ -282,6 +319,10 @@ round-trip min/avg/max = 6.596/8.023/9.451 ms
 
 / # exit
 ```
+As you will see during the ping that, built in dns resolves the name `overlay-c1`
+to the IP address of `overlay-c1` container and be able to reach another container
+across using a vxlan overlay.
+
 
 ### Chapter 4: Multi-host networking, using overlay driver
 
@@ -345,8 +386,9 @@ round-trip min/avg/max = 0.066/0.079/0.092 ms
 
 / # exit
 ```
-In the above example, you'll see that the name `overlay-c1` will resolve the IP address of 
-`overlay-c1` and be able to reach another container across using a vxlan overlay.
+Similar to contiv-networking, built in dns resolves the name `overlay-c1`
+to the IP address of `overlay-c1` container and be able to reach another container
+across using a vxlan overlay.
 
 ### Chapter 5: Using multiple tenants with arbitrary IPs in the networks
 
@@ -369,7 +411,7 @@ the same subnet and same network name, that we used before
 vagrant@tutorial-node1:~$ netctl net create -t blue --subnet=10.1.2.0/24 contiv-net
 vagrant@tutorial-node1:~$ netctl net ls -t blue
 Tenant  Network     Nw Type  Encap type  Packet tag  Subnet       Gateway
-------  -------     -------  ----------  ----------  -------      ------
+-/-----  -------     -------  ----------  ----------  -------      ------
 blue    contiv-net  data     vxlan       0           10.1.2.0/24  
 ```
 
@@ -514,18 +556,31 @@ What you see is that container has two interfaces belonging to it:
 traffic to be able to reach the container `contiv-c1`. This also relies on the host's dns
 resolv.conf as a default way to resolve non container IP resolution.
 
-Similarly outside traffic can be exposed on specific ports using `-p` command
+Similarly outside traffic can be exposed on specific ports using `-p` command. Before
+we do that, let us confirm that port 9099 is not reachable from the host
+`tutorial-node1`
 ```
 vagrant@tutorial-node1:~$ nc -zvw 1 localhost 9099
 nc: connect to localhost port 9099 (tcp) failed: Connection refused
 nc: connect to localhost port 9099 (tcp) failed: Connection refused
+```
 
+Now we start a container that exposes tcp port 9099 out in the host.
+```
 vagrant@tutorial-node1:~$ docker run -itd -p 9099:9099 --name=contiv-exposed --net=contiv-net alpine /bin/sh
+```
 
+And if we re-run our `nc` utility, we'll see that 9099 is reachable.
+```
 vagrant@tutorial-node1:~$ nc -zvw 1 localhost 9099
 Connection to localhost 9099 port [tcp/*] succeeded!
+```
 
-vagrant@tutorial-node1:~$ iptables -t nat -L -n
+This happens because docker as soon as a port is exposed, a NAT rule is installed for
+the port to allow rest of the network to access the container on the specified/exposed
+port. The nat rules on the host can be seen by:
+```
+vagrant@tutorial-node1:~$ sudo iptables -t nat -L -n
 iptables v1.4.21: can't initialize iptables table `nat': Permission denied (you must be root)
 Perhaps iptables or your kernel needs to be upgraded.
 vagrant@tutorial-node1:~$ sudo iptables -t nat -L -n
@@ -578,11 +633,15 @@ The allocated vlan can be used to connect any workload in vlan 112 in the networ
 The interface that connects to the outside network needs to be specified during netplugin
 start, for this VM configuration it is set as `eth2`
 
-Let's run some containers to belong to this network, one on each node
+Let's run some containers to belong to this network, one on each node. Firs one on 
+`tutorial-node1`
 ```
 vagrant@tutorial-node1:~$ docker run -itd --name=contiv-vlan-c1 --net=contiv-vlan alpine /bin/sh
 4bf58874c937e242b4fc2fd8bfd6896a7719fd10475af96e065a83a2e80e9e48
+```
 
+And another one on `tutorial-node2`
+```
 vagrant@tutorial-node2:~$ docker run -itd --name=contiv-vlan-c2 --net=contiv-vlan alpine /bin/sh
 1c463ecad8295b112a7556d1eaf35f1a8152c6b8cfcef1356d40a7b015ae9d02
 
@@ -613,22 +672,33 @@ listening on eth2, link-type EN10MB (Ethernet), capture size 262144 bytes
 5 packets captured
 ```
 
-Note that the vlan is same as what we configured in the VLAN.
+Note that the vlan shown in tcpdump is same (i.e. `112`) as what we configured in the VLAN. After verifying this, feel free to stop the ping that is still running on 
+`contiv-vlan-c2` container.
 
 ### Chapter 7: Applying policies between containers with Contiv
 
 Contiv provide a way to apply isolation policies between containers groups.
-For this, we create a simple policy called db-policy, and add some rules to which ports are allowed
+For this, we create a simple policy called db-policy, and add some rules to which ports are allowed.
 
+Let's start with `tutorial-node` and create the contiv-net if you start this chapter
+afresh i.e. after `vagrant up`
+```
+vagrant@tutorial-node1:~$ netctl net create --subnet=10.1.2.0/24 contiv-net
+```
+
+Next we create a policy called `db-policy` to be applied to all db containers.
 ```
 vagrant@tutorial-node1:~$ netctl policy create db-policy
 INFO[0000] Creating policy default:db-policy
-vagrant@tutorial-node1:~$ netctl policy rule-add db-policy 1 -direction=in -protocol=tcp -action=deny
 vagrant@tutorial-node1:~$ netctl policy ls
 Tenant   Policy
 ------   ------
 default  db-policy
+```
 
+Next we create some rules that are part of the policy
+```
+vagrant@tutorial-node1:~$ netctl policy rule-add db-policy 1 -direction=in -protocol=tcp -action=deny
 vagrant@tutorial-node1:~$ netctl policy rule-add db-policy 2 -direction=in -protocol=tcp -port=8888 -action=allow -priority=10
 vagrant@tutorial-node1:~$ netctl policy rule-ls db-policy
 Incoming Rules:
@@ -641,8 +711,8 @@ Rule  Priority  To EndpointGroup  To Network  To IpAddress  Protocol  Port  Acti
 ----  --------  ----------------  ----------  ---------     --------  ----  ------
 ```
 
-Then we associate the policy with a group (a group is an arbitrary collection of containers) and run
-some containers that belong to `db` group
+Finally, we associate the policy with a group (a group is an arbitrary collection of 
+containers) and run some containers that belong to `db` group
 ```
 vagrant@tutorial-node1:~$ netctl group create contiv-net db -policy=db-policy
 vagrant@tutorial-node1:~$ netctl group ls
@@ -665,7 +735,10 @@ vagrant@tutorial-node1:~$ docker inspect --format='{{range .NetworkSettings.Netw
 vagrant@tutorial-node1:~$ docker exec -it contiv-db /bin/sh
 / # nc -l 8888
 <awaiting connection>
+```
 
+Switch over to `tutorial-node2` window and run a web container and verify the policy.
+```
 vagrant@tutorial-node2:~$ docker run -itd --name=contiv-web --net=contiv-net alpine /bin/sh
 54108c756699071d527a567f9b5d266284aaf5299b888d75cd19ba1a40a1135a
 vagrant@tutorial-node2:~$ docker exec -it contiv-web /bin/sh
@@ -675,8 +748,13 @@ nc: 10.1.2.7 (10.1.2.7:8890): Operation timed out
 / # nc -nzvw 1 10.1.2.7 8889
 nc: 10.1.2.7 (10.1.2.7:8889): Operation timed out
 / # nc -nzvw 1 10.1.2.7 8888
-/ # 
+/ #
 ```
+
+Note that the last scan on port `8888` using `nc -nzvw 1 10.1.2.7 8888` returned
+without any `Operation timed out` message. At this point you can add/delete rules
+to the policy dynamically
+
 
 ### Chapter 8: Running containers in a swarm cluster
 
@@ -688,7 +766,6 @@ vagrant@tutorial-node1:~$ export DOCKER_HOST=tcp://192.168.2.10:2375
 
 Let's look at the status of various hosts using `docker info`
 ```
-vagrant@tutorial-node1:~$ docker info
 vagrant@tutorial-node1:~$ docker info
 Containers: 16
 Images: 3
@@ -711,8 +788,8 @@ Total Memory: 4.103 GiB
 Name: tutorial-node1
 No Proxy: 192.168.2.10,192.168.2.11,127.0.0.1,localhost,netmaster
 ```
-Above command would display the #nodes in the cluster, their cpu, memory and other
-relevant details.
+Above command would display the #nodes, #containers in the cluster, available cpu,
+memory and other relevant details.
 
 At this point if we run some containers, they will get schedule dynamically across 
 the cluster, which is two nodes `tutorial-node1` and `tutorial-node2` for us.
@@ -722,7 +799,12 @@ vagrant@tutorial-node1:~$ docker run -itd --name=contiv-cluster-c1 --net=contiv-
 f8fa35c0aa0ecd692a31e3d5249f5c158bd18902926978265acb3b38a9ed1c0d
 vagrant@tutorial-node1:~$ docker run -itd --name=contiv-cluster-c2 --net=contiv-net alpine /bin/sh
 bfc750736007c307827ae5012755085ca6591f3ac3ac0b707d2befd00e5d1621
-vagrant@tutorial-node1:~$ docker ps
+```
+
+After running two containers, scheduler will schedule these containers using the
+scheduling algorithm `bin-packing` or `spread`, and if they are not placed on 
+different nodes, feel free to start more containers to see the distribution.
+
 vagrant@tutorial-node1:~$ docker ps
 CONTAINER ID        IMAGE                          COMMAND             CREATED             STATUS                  PORTS                         NAMES
 bfc750736007        alpine                         "/bin/sh"           5 seconds ago       Up Less than a second                                 tutorial-node2/contiv-cluster-c2
@@ -744,6 +826,31 @@ fb822eda9916        alpine                         "/bin/sh"           2 hours a
 ab353464b4e2        skynetservices/skydns:latest   "/skydns"           2 hours ago         Up 2 hours              53/tcp, 53/udp                tutorial-node1/defaultdns
 ```
 
+Let us conclude this section by checking the inter-container connectivity and external 
+connectivity for the containers scheduled across multiple hosts
+```
+agrant@tutorial-node1:~$ docker exec -it contiv-cluster-c1 /bin/sh
+/ # 
+/ # 
+/ # 
+/ # ping contiv-cluster-c2
+PING contiv-cluster-c2 (10.1.2.7): 56 data bytes
+64 bytes from 10.1.2.7: seq=0 ttl=64 time=8.440 ms
+64 bytes from 10.1.2.7: seq=1 ttl=64 time=1.479 ms
+^C
+--- contiv-cluster-c2 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 1.479/4.959/8.440 ms
+/ # ping contiv.com
+PING contiv.com (216.239.36.21): 56 data bytes
+64 bytes from 216.239.36.21: seq=0 ttl=61 time=43.537 ms
+64 bytes from 216.239.36.21: seq=1 ttl=61 time=38.867 ms
+^C
+--- contiv.com ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 38.867/41.202/43.537 ms
+```
+
 ### Cleanup: **after all play is done**
 To cleanup the setup, after doing all the experiments, exit the VM destroy VMs
 ```
@@ -759,3 +866,9 @@ $ vagrant destroy -f
 2. [CNM Design](https://github.com/docker/libnetwork/blob/master/docs/design.md)
 3. [Contiv User Guide](http://docs.contiv.io)
 4. [Contiv Networking Code](https://github.com/contiv/netplugin)
+
+
+### Improvements or Comments
+This tutorial was developed by Contiv engineers. Thank you for trying out this tutorial.
+Please file a github issue if you see an issue with the tutorial, or if you prefer
+improving some text, feel free to send a pull request.
