@@ -19,7 +19,7 @@ $ curl https://raw.githubusercontent.com/jainvipin/tutorial/master/Vagrantfile -
 
 #### Step 2: On `Microsoft Windows systems` create resolv.conf file in the current directory,
 that would be needed by the VMs to access outside network. Ths next step will fail
-if this is not specified correctly. On `Mac` the Vagrant bringup automatically
+if this is not specified correctly. On `Mac` or `Linux` Vagrant automatically
 copies this file from `/etc/resolv.conf`
 ```
 $ cat resolv.conf
@@ -42,31 +42,33 @@ $
 ```
 $ vagrant ssh tutorial-node1
 vagrant@tutorial-node1:~$ docker info
+```
+The above command shows the node information, version, etc.
+
+```
 vagrant@tutorial-node1:~$ etcdctl cluster-health
+```
+`etcdctl` is a control utility to manipulate etcd, state store used by kubernetes/docker/contiv
+
+```
 vagrant@tutorial-node1:~$ ifconfig docker0
 vagrant@tutorial-node1:~$ ifconfig eth1
 vagrant@tutorial-node1:~$ ifconfig eth0
-vagrant@tutorial-node1:~$ netctl version
 ```
-
 In the above output, you'll see:
 - `docker0` interface corresponds to the linux bridge and its associated
 subnet `172.17.0.1/16`. This is created by docker daemon automatically, and
 is the default network containers would belong to when an override network
 is not specified
-- `eth1` in this VM is the interface that connects to external network (if needed)
 - `eth0` in this VM is the management interface, on which we ssh into the VM
+- `eth1` in this VM is the interface that connects to external network (if needed)
+- `eth2` in this VM is the interface that carries vxlan and control (e.g. etcd) traffic
 
-
-#### Cleanup: **after all play is done**
-To cleanup the setup, after doing all the experiments, exit the VM destroy VMs
 ```
-$ vagrant destroy -f
-==> tutorial-node2: Forcing shutdown of VM...
-==> tutorial-node2: Destroying VM and associated drives...
-==> tutorial-node1: Forcing shutdown of VM...
-==> tutorial-node1: Destroying VM and associated drives...
+vagrant@tutorial-node1:~$ netctl version
 ```
+`netctl` is a utility to create, update, read and modify contiv objects. It is a CLI wrapper
+on top of REST interface.
 
 
 ### Chapter 1 - Container Networking Models
@@ -86,6 +88,7 @@ that schedules regular docker containers e.g. Nomad or Mesos docker containerize
 
 #### CoreOS CNI - Container Network Interface (CNI)
 CNI (Container Network Interface) CoreOS's network model for containers
+- Allows specifying container id (uuid) for which network interface is being created
 - Provide Container Create/Delete events
 - Provides access to network namespace to the driver to plumb networking
 - No separate IPAM Driver: Container Create returns the IAPM information along with other data
@@ -187,69 +190,11 @@ MASQUERADE rule for outbound traffic for `172.17.0.0/16`
 $ vagrant@tutorial-node1:~$ sudo iptables -t nat -L -n
 ```
 
-### Chapter 3: Multi-host networking, using overlay driver
-
-Docker engine has a built in overlay driver that can be use to connect
-containers across multiple nodes. 
-```
-vagrant@tutorial-node1:~$ docker network create -d=overlay --subnet=10.1.1.0/24 overlay-net
-22f79fe02239d3cbc2c8a4f7147f0e799dc13f3af6e46a69cc3adf8f299a7e56
-
-vagrant@tutorial-node1:~$ docker network inspect overlay-net
-[
-    {
-        "Name": "overlay-net",
-        "Id": "22f79fe02239d3cbc2c8a4f7147f0e799dc13f3af6e46a69cc3adf8f299a7e56",
-        "Scope": "global",
-        "Driver": "overlay",
-        "IPAM": {
-            "Driver": "default",
-            "Config": [
-                {
-                    "Subnet": "10.1.1.0/24"
-                }
-            ]
-        },
-        "Containers": {},
-        "Options": {}
-    }
-]
-
-vagrant@tutorial-node1:~$ docker run -itd --name=overlay-c1 --net=overlay-net alpine /bin/sh
-0ab717006962fb2fe936aa3c133dd27d68c347d5f239f473373c151ad4c77b28
-
-vagrant@tutorial-node1:~$ docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' overlay-c1
-10.1.1.2
-
-vagrant@tutorial-node1:~$ docker run -itd --name=overlay-c2 --net=overlay-net alpine /bin/sh
-0a6f43693361855ad56cda417b9ec63f504de4782ac82f0181fed92d803b4a30
-vagrant@tutorial-node2:~$ docker ps
-vagrant@tutorial-node1:~$ docker ps
-CONTAINER ID        IMAGE                          COMMAND             CREATED             STATUS              PORTS               NAMES
-fb822eda9916        alpine                         "/bin/sh"           3 minutes ago       Up 3 minutes                            overlay-c2
-0ab717006962        alpine                         "/bin/sh"           21 minutes ago      Up 21 minutes                           overlay-c1
-2cf083c0a4de        alpine                         "/bin/sh"           28 minutes ago      Up 28 minutes                           vanilla-c
-ab353464b4e2        skynetservices/skydns:latest   "/skydns"           33 minutes ago      Up 33 minutes       53/tcp, 53/udp      defaultdns
-
-vagrant@tutorial-node2:~$ docker exec -it overlay-c2 /bin/sh
-/ # ping overlay-c1
-PING overlay-c1 (10.1.1.2): 56 data bytes
-64 bytes from 10.1.1.2: seq=0 ttl=64 time=0.066 ms
-64 bytes from 10.1.1.2: seq=1 ttl=64 time=0.092 ms
-^C
---- overlay-c1 ping statistics ---
-2 packets transmitted, 2 packets received, 0% packet loss
-round-trip min/avg/max = 0.066/0.079/0.092 ms
-
-/ # exit
-```
-The above will resolve the IP address of `overlay-c1` and be able to reach another container
-across using a vxlan overlay network.
-
-### Chapter 4: Multi-host networking, Using remote drivers
+### Chapter 3: Multi-host networking, Using remote drivers
 
 Let's use the same example as above to spin up two containers on the two different hosts
 
+#### 1. Create a multi-host network
 ```
 vagrant@tutorial-node1:~$ netctl net create --subnet=10.1.2.0/24 contiv-net
 vagrant@tutorial-node1:~$ netctl net ls
@@ -328,6 +273,71 @@ round-trip min/avg/max = 6.596/8.023/9.451 ms
 
 / # exit
 ```
+
+### Chapter 4: Multi-host networking, using overlay driver
+
+Docker engine has a built in overlay driver that can be use to connect
+containers across multiple nodes. 
+```
+vagrant@tutorial-node1:~$ docker network create -d=overlay --subnet=10.1.1.0/24 overlay-net
+22f79fe02239d3cbc2c8a4f7147f0e799dc13f3af6e46a69cc3adf8f299a7e56
+
+vagrant@tutorial-node1:~$ docker network inspect overlay-net
+[
+    {
+        "Name": "overlay-net",
+        "Id": "22f79fe02239d3cbc2c8a4f7147f0e799dc13f3af6e46a69cc3adf8f299a7e56",
+        "Scope": "global",
+        "Driver": "overlay",
+        "IPAM": {
+            "Driver": "default",
+            "Config": [
+                {
+                    "Subnet": "10.1.1.0/24"
+                }
+            ]
+        },
+        "Containers": {},
+        "Options": {}
+    }
+]
+```
+
+Now, we can create a container that belongs to `overlay-net`
+```
+vagrant@tutorial-node1:~$ docker run -itd --name=overlay-c1 --net=overlay-net alpine /bin/sh
+0ab717006962fb2fe936aa3c133dd27d68c347d5f239f473373c151ad4c77b28
+
+vagrant@tutorial-node1:~$ docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' overlay-c1
+10.1.1.2
+```
+
+And, we can run another container within the cluster, that belongs to the same network and 
+make sure that they can reach each other.
+```
+vagrant@tutorial-node1:~$ docker run -itd --name=overlay-c2 --net=overlay-net alpine /bin/sh
+0a6f43693361855ad56cda417b9ec63f504de4782ac82f0181fed92d803b4a30
+vagrant@tutorial-node1:~$ docker ps
+CONTAINER ID        IMAGE                          COMMAND             CREATED             STATUS              PORTS               NAMES
+fb822eda9916        alpine                         "/bin/sh"           3 minutes ago       Up 3 minutes                            overlay-c2
+0ab717006962        alpine                         "/bin/sh"           21 minutes ago      Up 21 minutes                           overlay-c1
+2cf083c0a4de        alpine                         "/bin/sh"           28 minutes ago      Up 28 minutes                           vanilla-c
+ab353464b4e2        skynetservices/skydns:latest   "/skydns"           33 minutes ago      Up 33 minutes       53/tcp, 53/udp      defaultdns
+
+vagrant@tutorial-node2:~$ docker exec -it overlay-c2 /bin/sh
+/ # ping overlay-c1
+PING overlay-c1 (10.1.1.2): 56 data bytes
+64 bytes from 10.1.1.2: seq=0 ttl=64 time=0.066 ms
+64 bytes from 10.1.1.2: seq=1 ttl=64 time=0.092 ms
+^C
+--- overlay-c1 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 0.066/0.079/0.092 ms
+
+/ # exit
+```
+In the above example, you'll see that the name `overlay-c1` will resolve the IP address of 
+`overlay-c1` and be able to reach another container across using a vxlan overlay.
 
 ### Chapter 5: Using multiple tenants with arbitrary IPs in the networks
 
@@ -723,6 +733,16 @@ fb822eda9916        alpine                         "/bin/sh"           2 hours a
 0ab717006962        alpine                         "/bin/sh"           2 hours ago         Up 2 hours                                            tutorial-node1/overlay-c1
 2cf083c0a4de        alpine                         "/bin/sh"           2 hours ago         Up 2 hours                                            tutorial-node1/vanilla-c
 ab353464b4e2        skynetservices/skydns:latest   "/skydns"           2 hours ago         Up 2 hours              53/tcp, 53/udp                tutorial-node1/defaultdns
+```
+
+### Cleanup: **after all play is done**
+To cleanup the setup, after doing all the experiments, exit the VM destroy VMs
+```
+$ vagrant destroy -f
+==> tutorial-node2: Forcing shutdown of VM...
+==> tutorial-node2: Destroying VM and associated drives...
+==> tutorial-node1: Forcing shutdown of VM...
+==> tutorial-node1: Destroying VM and associated drives...
 ```
 
 ### References
