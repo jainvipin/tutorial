@@ -17,10 +17,14 @@ $ curl https://raw.githubusercontent.com/jainvipin/tutorial/master/Vagrantfile -
 100  6731  100  6731    0     0   8424      0 --:--:-- --:--:-- --:--:--  8424
 ```
 
-#### Step 2: On `Microsoft Windows systems` create resolv.conf file in the current directory,
-that would be needed by the VMs to access outside network. Ths next step will fail
-if this is not specified correctly. On `Mac` or `Linux` Vagrant automatically
-copies this file from `/etc/resolv.conf`
+Note: On Windows the file may be downloaded with `.txt` extension. Rename the file
+if needed to remove the extension. Some steps are
+documented [here](http://www.mediacollege.com/microsoft/windows/extension-change.html).
+
+#### Step 2: Create resolv.conf file in the current directory, where you have copied the Vagrantfile.
+This is used by the VMs to access outside network for downloading docker images in
+rest of tuorial. The next steps will fail if this is not specified correctly.
+On `Mac` or `Linux` based systems you may copy `/etc/resolv.conf` to current directory.
 ```
 $ cat resolv.conf
 domain foobar.com
@@ -55,6 +59,11 @@ vagrant@tutorial-node1:~$ ifconfig docker0
 vagrant@tutorial-node1:~$ ifconfig eth1
 vagrant@tutorial-node1:~$ ifconfig eth0
 ```
+
+**Note**:
+- On Windows, you will need a ssh client to be installed like putty, cygwin etc.
+- The username/password for the VMs is vagrant/vagrant
+
 In the above output, you'll see:
 - `docker0` interface corresponds to the linux bridge and its associated
 subnet `172.17.0.1/16`. This is created by docker daemon automatically, and
@@ -190,7 +199,7 @@ MASQUERADE rule for outbound traffic for `172.17.0.0/16`
 $ vagrant@tutorial-node1:~$ sudo iptables -t nat -L -n
 ```
 
-### Chapter 3: Multi-host networking, Using remote drivers
+### Chapter 3: Multi-host networking, using remote drivers (contiv)
 
 Let's use the same example as above to spin up two containers on the two different hosts
 
