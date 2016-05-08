@@ -788,6 +788,7 @@ Total Memory: 4.103 GiB
 Name: tutorial-node1
 No Proxy: 192.168.2.10,192.168.2.11,127.0.0.1,localhost,netmaster
 ```
+
 Above command would display the #nodes, #containers in the cluster, available cpu,
 memory and other relevant details.
 
@@ -805,6 +806,7 @@ After running two containers, scheduler will schedule these containers using the
 scheduling algorithm `bin-packing` or `spread`, and if they are not placed on 
 different nodes, feel free to start more containers to see the distribution.
 
+```
 vagrant@tutorial-node1:~$ docker ps
 CONTAINER ID        IMAGE                          COMMAND             CREATED             STATUS                  PORTS                         NAMES
 bfc750736007        alpine                         "/bin/sh"           5 seconds ago       Up Less than a second                                 tutorial-node2/contiv-cluster-c2
