@@ -117,7 +117,9 @@ The recommended way is to cleanup the setup using `vagrant -f destroy`, and
 then restarting them again using `vagrant up`
 
 
-### Chapter 1 - Container Networking Models
+### Chapter 1 - Introduction to Container Networking
+
+There are two main container networking model discussed within the community.
 
 #### Docker libnetwork - Container Network Model (CNM)
 
@@ -143,7 +145,7 @@ CNI (Container Network Interface) CoreOS's network model for containers
 Using Contiv with CNI/Kubernetes can be found [here](https://github.com/contiv/netplugin/tree/master/mgmtfn/k8splugin).
 The rest of the tutorial walks through the docker examples, which implements CNM APIs
 
-### Chapter 2: Basic networking
+#### Basic container networking
 
 Let's examine the networking a container gets upon vanilla run
 ```
@@ -236,11 +238,16 @@ MASQUERADE rule for outbound traffic for `172.17.0.0/16`
 $ vagrant@tutorial-node1:~$ sudo iptables -t nat -L -n
 ```
 
-### Chapter 3: Multi-host networking, using remote drivers (contiv)
+### Chapter 2: Multi-host networking
 
+There are many solutions, like Contiv, Calico, Weave, Openshift, OpenContrail, Nuage,
+VMWare, Docker, Kubernetes, Openstack that provide solutions to multi-host
+container networking. In this section we examine Contiv and Docker overlay solutions.
+
+#### Multi-host networking with Contiv
 Let's use the same example as above to spin up two containers on the two different hosts
 
-#### 1. Create a multi-host network
+3#### 1. Create a multi-host network
 ```
 vagrant@tutorial-node1:~$ netctl net create --subnet=10.1.2.0/24 contiv-net
 vagrant@tutorial-node1:~$ netctl net ls
@@ -324,7 +331,7 @@ to the IP address of `overlay-c1` container and be able to reach another contain
 across using a vxlan overlay.
 
 
-### Chapter 4: Multi-host networking, using overlay driver
+#### Docker Overlay multi-host networking
 
 Docker engine has a built in overlay driver that can be use to connect
 containers across multiple nodes. 
@@ -390,7 +397,7 @@ Similar to contiv-networking, built in dns resolves the name `overlay-c1`
 to the IP address of `overlay-c1` container and be able to reach another container
 across using a vxlan overlay.
 
-### Chapter 5: Using multiple tenants with arbitrary IPs in the networks
+### Chapter 3: Using multiple tenants with arbitrary IPs in the networks
 
 First, let's create a new tenant space
 ```
@@ -467,7 +474,6 @@ vagrant@tutorial-node2:~$ docker network inspect contiv-net/blue
             },
             "521abe19d6b5b3557de6ee4654cc504af0c497a64683f737ffb6f8238ddd6454": {
                 "EndpointID": "4d9ca7047b8737b78f271a41db82bbf5c3004f297211d831af757f565fc0c691",
-                "MacAddress": "",
                 "IPv4Address": "10.1.2.3/24",
                 "IPv6Address": ""
             }
@@ -499,7 +505,7 @@ round-trip min/avg/max = 1.637/1.637/1.637 ms
 / # exit
 ```
 
-### Chapter 6: Connecting containers to external networks
+### Chapter 4: Connecting containers to external networks
 
 In this chapter, we explore ways to connect containers to the external networks
 
@@ -675,7 +681,7 @@ listening on eth2, link-type EN10MB (Ethernet), capture size 262144 bytes
 Note that the vlan shown in tcpdump is same (i.e. `112`) as what we configured in the VLAN. After verifying this, feel free to stop the ping that is still running on 
 `contiv-vlan-c2` container.
 
-### Chapter 7: Applying policies between containers with Contiv
+### Chapter 5: Applying policies between containers with Contiv
 
 Contiv provide a way to apply isolation policies between containers groups.
 For this, we create a simple policy called db-policy, and add some rules to which ports are allowed.
@@ -756,7 +762,7 @@ without any `Operation timed out` message. At this point you can add/delete rule
 to the policy dynamically
 
 
-### Chapter 8: Running containers in a swarm cluster
+### Chapter 6: Running containers in a swarm cluster
 
 We can bring in swarm scheduler by redirecting our requests to an already provision
 swarm cluster. To do so, we can set `DOCKER_HOST` as follows:
