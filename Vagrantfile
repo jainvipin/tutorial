@@ -1,6 +1,10 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+Vagrant.require_version ">= 1.8.0"
+
+system("./check_vbox_version.sh")
+
 $cluster_ip_nodes = ""
 
 provision_common = <<SCRIPT
@@ -14,7 +18,7 @@ hostname -F /etc/hostname
 /sbin/ip link set eth1 up
 /sbin/ip link set eth2 up
 
-# fetch tutorial 
+# fetch tutorial
 mkdir -p /opt && cd /opt
 git clone https://github.com/jainvipin/tutorial
 mv tutorial/bin .
@@ -87,10 +91,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     base_ip = "192.168.2."
     node_ips = num_nodes.times.collect { |n| base_ip + "#{n+10}" }
     $cluster_ip_nodes = node_ips.join(",")
- 
+
     node_names = num_nodes.times.collect { |n| "tutorial-node#{n+1}" }
     node_peers = []
-   
+
     num_nodes.times do |n|
         node_name = node_names[n]
         node_addr = node_ips[n]
@@ -110,10 +114,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         net_num = (n+1)%3
         if net_num == 0 then
            network_name = "contiv_orange"
-        else 
+        else
            if net_num == 1 then
               network_name = "contiv_yellow"
-           else 
+           else
               network_name = "contiv_green"
            end
         end
