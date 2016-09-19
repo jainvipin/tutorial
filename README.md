@@ -43,7 +43,7 @@ $ vagrant up
 Bringing machine 'tutorial-node1' up with 'virtualbox' provider...
 Bringing machine 'tutorial-node2' up with 'virtualbox' provider...
  < more output here when trying to bring up the two VMs>
-==> tutorial-node2: ++ nohup /opt/bin/start-swarm.sh 192.168.2.11 slave
+==> tutorial-node1: ++ /opt/bin/startSwarm.py -binpath /opt/bin -nodes 192.168.2.10,192.168.2.11
 $
 ```
 
@@ -267,7 +267,7 @@ container networking. In this section we examine Contiv and Docker overlay solut
 #### Multi-host networking with Contiv
 Let's use the same example as above to spin up two containers on the two different hosts
 
-3#### 1. Create a multi-host network
+#### 1. Create a multi-host network
 ```
 vagrant@tutorial-node1:~$ netctl net create --subnet=10.1.2.0/24 contiv-net
 vagrant@tutorial-node1:~$ netctl net ls
@@ -358,70 +358,6 @@ Docker's overlay multi-host networking towards the end after we experiment
 with `contiv` because then we can terminate the contiv driver and
 let Docker overlay driver use the vxlan port bindings. More about it in
 later chapter.
-
-For this experiment we switch back
-to `tutorial-node1` 
-```
-vagrant@tutorial-node1:~$ docker network create -d=overlay --subnet=10.1.1.0/24 overlay-net
-22f79fe02239d3cbc2c8a4f7147f0e799dc13f3af6e46a69cc3adf8f299a7e56
-
-vagrant@tutorial-node1:~$ docker network inspect overlay-net
-[
-    {
-        "Name": "overlay-net",
-        "Id": "22f79fe02239d3cbc2c8a4f7147f0e799dc13f3af6e46a69cc3adf8f299a7e56",
-        "Scope": "global",
-        "Driver": "overlay",
-        "IPAM": {
-            "Driver": "default",
-            "Config": [
-                {
-                    "Subnet": "10.1.1.0/24"
-                }
-            ]
-        },
-        "Containers": {},
-        "Options": {}
-    }
-]
-```
-
-Now, we can create a container that belongs to `overlay-net`
-```
-vagrant@tutorial-node1:~$ docker run -itd --name=overlay-c1 --net=overlay-net alpine /bin/sh
-0ab717006962fb2fe936aa3c133dd27d68c347d5f239f473373c151ad4c77b28
-
-vagrant@tutorial-node1:~$ docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' overlay-c1
-10.1.1.2
-```
-
-And, we can run another container within the cluster, that belongs to the same network and 
-make sure that they can reach each other.
-```
-vagrant@tutorial-node1:~$ docker run -itd --name=overlay-c2 --net=overlay-net alpine /bin/sh
-0a6f43693361855ad56cda417b9ec63f504de4782ac82f0181fed92d803b4a30
-vagrant@tutorial-node1:~$ docker ps
-CONTAINER ID        IMAGE                          COMMAND             CREATED             STATUS              PORTS               NAMES
-fb822eda9916        alpine                         "/bin/sh"           3 minutes ago       Up 3 minutes                            overlay-c2
-0ab717006962        alpine                         "/bin/sh"           21 minutes ago      Up 21 minutes                           overlay-c1
-2cf083c0a4de        alpine                         "/bin/sh"           28 minutes ago      Up 28 minutes                           vanilla-c
-ab353464b4e2        skynetservices/skydns:latest   "/skydns"           33 minutes ago      Up 33 minutes       53/tcp, 53/udp      defaultdns
-
-vagrant@tutorial-node2:~$ docker exec -it overlay-c2 /bin/sh
-/ # ping overlay-c1
-PING overlay-c1 (10.1.1.2): 56 data bytes
-64 bytes from 10.1.1.2: seq=0 ttl=64 time=0.066 ms
-64 bytes from 10.1.1.2: seq=1 ttl=64 time=0.092 ms
-^C
---- overlay-c1 ping statistics ---
-2 packets transmitted, 2 packets received, 0% packet loss
-round-trip min/avg/max = 0.066/0.079/0.092 ms
-
-/ # exit
-```
-Similar to contiv-networking, built in dns resolves the name `overlay-c1`
-to the IP address of `overlay-c1` container and be able to reach another container
-across using a vxlan overlay.
 
 ### Chapter 3: Using multiple tenants with arbitrary IPs in the networks
 
@@ -614,7 +550,13 @@ Similarly outside traffic can be exposed on specific ports using `-p` command. B
 we do that, let us confirm that port 9099 is not reachable from the host
 `tutorial-node1`. To install `nc` netcat utility please run `sudo yum -y install nc` on node1
 ```
-vagrant@tutorial-node1:~$ $ nc -vw 1 localhost 9099
+# Install nc utility
+
+vagrant@tutorial-node1:~$ sudo yum -y install nc
+< some yum install output >
+Complete!
+
+vagrant@tutorial-node1:~$ nc -vw 1 localhost 9099
 Ncat: Version 6.40 ( http://nmap.org/ncat )
 Ncat: Connection to ::1 failed: Connection refused.
 Ncat: Trying next address...
@@ -777,13 +719,13 @@ Rule  Priority  To EndpointGroup  To Network  To IpAddress  Protocol  Port  Acti
 Finally, we associate the policy with a group (a group is an arbitrary collection of 
 containers) and run some containers that belong to `db` group
 ```
-vagrant@tutorial-node1:~$ netctl group create contiv-net db -policy=db-policy
-vagrant@tutorial-node1:~$ netctl group ls
-Tenant   Group  Network     Policies
-------   -----  -------     --------
-default  db     contiv-net  db-policy
+vagrant@tutorial-node1:~$ netctl group create contiv-net db-group -policy=db-policy
+[vagrant@tutorial-node1 ~]$ netctl group ls
+Tenant   Group     Network     Policies   Network profile
+------   -----     -------     --------   ---------------
+default  db-group  contiv-net  db-policy  
 
-vagrant@tutorial-node1:~$ docker run -itd --name=contiv-db --net=db alpine /bin/sh
+vagrant@tutorial-node1:~$ docker run -itd --name=contiv-db --net=db-group alpine /bin/sh
 27eedc376ef43e5a5f3f4ede01635d447b1a0c313cca4c2a640ba4d5dea3573a
 ```
 
@@ -793,7 +735,7 @@ would scan a range of ports and confirm that only the one permitted i.e. `port 8
 `db` policy is accessible towards db container
 ```
 vagrant@tutorial-node1:~$ docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' contiv-db
-10.1.2.7
+10.1.2.5
 
 vagrant@tutorial-node1:~$ docker exec -it contiv-db /bin/sh
 / # nc -l 8888
@@ -801,23 +743,24 @@ vagrant@tutorial-node1:~$ docker exec -it contiv-db /bin/sh
 ```
 
 Switch over to `tutorial-node2` window and run a web container and verify the policy. In doing so
-please make sure that you enter the IP address of the node discovered above, which in our case was `10.1.2.7`
+please make sure that you enter the IP address of the node discovered above, which in our case was `10.1.2.5`
 ```
 vagrant@tutorial-node2:~$ docker run -itd --name=contiv-web --net=contiv-net alpine /bin/sh
 54108c756699071d527a567f9b5d266284aaf5299b888d75cd19ba1a40a1135a
 vagrant@tutorial-node2:~$ docker exec -it contiv-web /bin/sh
 
-/ # nc -nzvw 1 10.1.2.7 8890
-nc: 10.1.2.7 (10.1.2.7:8890): Operation timed out
-/ # nc -nzvw 1 10.1.2.7 8889
-nc: 10.1.2.7 (10.1.2.7:8889): Operation timed out
-/ # nc -nzvw 1 10.1.2.7 8888
+/ # nc -nzvw 1 10.1.2.5 8890
+nc: 10.1.2.7 (10.1.2.5:8890): Operation timed out
+/ # nc -nzvw 1 10.1.2.5 8889
+nc: 10.1.2.7 (10.1.2.5:8889): Operation timed out
+/ # nc -nzvw 1 10.1.2.5 8888
 / #
 ```
 
-Note that the last scan on port `8888` using `nc -nzvw 1 10.1.2.7 8888` returned
-without any `Operation timed out` message. At this point you can add/delete rules
-to the policy dynamically
+Note that the last scan on port `8888` using `nc -nzvw 1 10.1.2.5 8888` returned
+without any `Operation timed out` message, which means web tier application is able
+to reach the database application's TCP/IP stack.
+At this point you can add/delete rules to the policy dynamically
 
 
 ### Chapter 6: Running containers in a swarm cluster
