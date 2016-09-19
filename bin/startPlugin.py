@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 # Start netplugin and netmaster
-import tbed
+import api.tbed
 import time
 import sys
 import os
@@ -14,20 +14,17 @@ parser.add_argument('--version', action='version', version='1.0.0')
 parser.add_argument("-nodes", required=True, help="list of nodes(comma seperated)")
 parser.add_argument("-user", default='vagrant', help="User id for ssh")
 parser.add_argument("-password", default='vagrant', help="password for ssh")
-parser.add_argument("-binpath", default='/opt/bin', help="netplugin/netmaster binary path")
+parser.add_argument("-binpath", default='/opt/gopath/bin', help="netplugin/netmaster binary path")
 
 # Parse the args
 args = parser.parse_args()
 addrList = args.nodes.split(",")
 
 # Cleanup all state and start netplugin/netmaster
-testbed = tbed.Testbed(addrList, args.user, args.password, args.binpath)
+testbed = api.tbed.Testbed(addrList, args.user, args.password, args.binpath)
 
 print "Waiting for netmaster to come up"
 time.sleep(15)
-
-# Setup proxy
-# setupProxy.setupProxy()
 
 print "################### Started Netplugin #####################"
 os._exit(0)

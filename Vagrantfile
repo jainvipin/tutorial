@@ -1,16 +1,18 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-$cluster_ip_nodes = ""
+require 'fileutils'
 
-provision_common = <<SCRIPT
+cluster_ip_nodes = ""
+
+provision_common_once = <<SCRIPT
 ## setup the environment file. Export the env-vars passed as args to 'vagrant up'
 echo Args passed: [[ $@ ]]
-
 echo -n "$1" > /etc/hostname
 hostname -F /etc/hostname
 
-/sbin/ip addr add "$3/24" dev eth1
+## >> new
+/sbin/ip addr add "$2/24" dev eth1
 /sbin/ip link set eth1 up
 /sbin/ip link set eth2 up
 
@@ -19,16 +21,12 @@ mkdir -p /opt && cd /opt
 git clone https://github.com/jainvipin/tutorial
 mv tutorial/bin .
 mv tutorial/data .
+# cp -r /import/bin .
+# cp -r /import/data .
+mkdir -p /opt/gopath//src/github.com/contiv/netplugin/
+ln -s /opt/bin /opt/gopath//src/github.com/contiv/netplugin/scripts
 
-echo 'export PATH=$PATH:/usr/local/go/bin:/opt/bin' >> /etc/profile.d/envvar.sh
-echo "export http_proxy='$4'" >> /etc/profile.d/envvar.sh
-echo "export https_proxy='$5'" >> /etc/profile.d/envvar.sh
-echo "export USE_RELEASE=$6" >> /etc/profile.d/envvar.sh
-echo "export no_proxy=$7,127.0.0.1,localhost,netmaster" >> /etc/profile.d/envvar.sh
-echo "export CLUSTER_NODE_IPS=$7" >> /etc/profile.d/envvar.sh
-source /etc/profile.d/envvar.sh
-
-wget -q https://github.com/contiv/netplugin/releases/download/v0.1-05-04-2016.22-46-43.UTC/netplugin-v0.1-05-04-2016.22-46-43.UTC.tar.bz2 -O /tmp/netplugin.bz2
+wget -q https://github.com/contiv/netplugin/releases/download/v0.1-09-14-2016.17-34-27.UTC/netplugin-v0.1-09-14-2016.17-34-27.UTC.tar.bz2 -O /tmp/netplugin.bz2
 cd /opt/bin
 tar xvjf /tmp/netplugin.bz2
 
@@ -41,86 +39,128 @@ tar xvjf /tmp/contiv-compose.bz2
 
 mv /etc/resolv.conf /etc/resolv.conf.bak
 cp /import/resolv.conf /etc/resolv.conf
+## << new
 
+echo 'export PATH=$PATH:/usr/local/go/bin:/opt/bin' >> /etc/profile.d/envvar.sh
+echo "export http_proxy='$4'" >> /etc/profile.d/envvar.sh
+echo "export https_proxy='$5'" >> /etc/profile.d/envvar.sh
+echo "export USE_RELEASE=$6" >> /etc/profile.d/envvar.sh
+echo "export no_proxy=$3,127.0.0.1,localhost,netmaster" >> /etc/profile.d/envvar.sh
+echo "export CLUSTER_NODE_IPS=$3" >> /etc/profile.d/envvar.sh
+echo "export CONTIV_CLUSTER_STORE=$7" >> /etc/profile.d/envvar.sh
+source /etc/profile.d/envvar.sh
+
+if [[ $# -gt 9 ]] && [[ $10 != "" ]]; then
+    shift; shift; shift; shift; shift; shift; shift; shift; shift
+    echo "export $@" >> /etc/profile.d/envvar.sh
+fi
+
+# Install specific docker version if required
+if [[ $8 != "" ]]; then
+    echo "Installing docker version " $8
+    if [[ $9 == "ubuntu" ]]; then
+        curl https://get.docker.com | sed s/docker-engine/docker-engine=$8-0~vivid/ | bash
+    else
+        # cleanup openstack-kilo repo if required
+        yum-config-manager --disable openstack-kilo
+        curl https://get.docker.com | sed s/docker-engine/docker-engine-$8/ | bash
+    fi
+fi
 # setup docker cluster store
-cp /opt/data/docker.service /lib/systemd/system/docker.service
-
+if [[ $7 == *"consul:"* ]]
+then
+    cp /opt/data/docker.service.consul /lib/systemd/system/docker.service
+else
+    cp /opt/data/docker.service /lib/systemd/system/docker.service
+fi
 # setup docker remote api
 cp /opt/data/docker-tcp.socket /etc/systemd/system/docker-tcp.socket
 systemctl enable docker-tcp.socket
-
 mkdir /etc/systemd/system/docker.service.d
 echo "[Service]" | sudo tee -a /etc/systemd/system/docker.service.d/http-proxy.conf
-echo "Environment=\\\"no_proxy=$7,127.0.0.1,localhost,netmaster\\\" \\\"http_proxy=$http_proxy\\\" \\\"https_proxy=$https_proxy\\\"" | sudo tee -a /etc/systemd/system/docker.service.d/http-proxy.conf
+echo "Environment=\\\"no_proxy=$CLUSTER_NODE_IPS,127.0.0.1,localhost,netmaster\\\" \\\"http_proxy=$http_proxy\\\" \\\"https_proxy=$https_proxy\\\"" | sudo tee -a /etc/systemd/system/docker.service.d/http-proxy.conf
 sudo systemctl daemon-reload
 sudo systemctl stop docker
 systemctl start docker-tcp.socket
 sudo systemctl start docker
 
-if [ $# -gt 7 ]; then
-    shift; shift; shift; shift; shift; shifti; shift
-    echo "export $@" >> /etc/profile.d/envvar.sh
-fi
-
+# remove duplicate docker key
 rm /etc/docker/key.json
-
 (service docker restart) || exit 1
 
+usermod -aG docker vagrant
+docker load --input /opt/data/dnscontainer.tar || echo "Loading skydns container failed"
+
+SCRIPT
+
+provision_common_always = <<SCRIPT
+
+# Drop cache to workaround vboxsf problem
+echo 3 > /proc/sys/vm/drop_caches
+
+# start docker daemon
+systemctl start docker
+
+# Start OVS if required
+systemctl start openvswitch
+
+# Enable ovs mgmt port
 (ovs-vsctl set-manager tcp:127.0.0.1:6640 && \
  ovs-vsctl set-manager ptcp:6640) || exit 1
-
-# docker load --input /opt/data/dnscontainer.tar
 SCRIPT
 
 VAGRANTFILE_API_VERSION = "2"
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
-    config.ssh.password="vagrant"
-    if ENV['CONTIV_NODE_OS'] && ENV['CONTIV_NODE_OS'] == "centos" then
-        config.vm.box = "contiv/centos71-netplugin"
+    if ENV['CONTIV_NODE_OS'] && ENV['CONTIV_NODE_OS'] == "ubuntu" then
+        config.vm.box = "contiv/ubuntu1604-netplugin"
+        config.vm.box_version = "0.7.0"
     else
-        config.vm.box = "contiv/ubuntu1504-netplugin"
+        config.vm.box = "contiv/centos72"
+        config.vm.box_version = "0.7.0"
     end
+    config.vm.provider 'virtualbox' do |v|
+        v.linked_clone = true if Vagrant::VERSION =~ /^1.8/
+    end
+
     num_nodes = 2
     if ENV['CONTIV_NODES'] && ENV['CONTIV_NODES'] != "" then
         num_nodes = ENV['CONTIV_NODES'].to_i
     end
     base_ip = "192.168.2."
+    if ENV['CONTIV_IP_PREFIX'] && ENV['CONTIV_IP_PREFIX'] != "" then
+        base_ip = ENV['CONTIV_IP_PREFIX']
+    end
     node_ips = num_nodes.times.collect { |n| base_ip + "#{n+10}" }
-    $cluster_ip_nodes = node_ips.join(",")
- 
+    cluster_ip_nodes = node_ips.join(",")
+
+    config.ssh.insert_key = false
     node_names = num_nodes.times.collect { |n| "tutorial-node#{n+1}" }
     node_peers = []
-   
-    num_nodes.times do |n|
+
+    (0..num_nodes-1).reverse_each do |n|
         node_name = node_names[n]
         node_addr = node_ips[n]
         node_peers += ["#{node_name}=http://#{node_addr}:2380,#{node_name}=http://#{node_addr}:7001"]
         consul_join_flag = if n > 0 then "-join #{node_ips[0]}" else "" end
         consul_bootstrap_flag = "-bootstrap-expect=3"
-        swarm_flag = "slave"
         if num_nodes < 3 then
-            if n == 0 then
-                consul_bootstrap_flag = "-bootstrap"
-                swarm_flag = "master"
-            else
-                consul_bootstrap_flag = ""
-                swarm_flag = "slave"
-            end
+          if n == 0 then
+            consul_bootstrap_flag = "-bootstrap"
+          else
+            consul_bootstrap_flag = ""
+          end
         end
         net_num = (n+1)%3
         if net_num == 0 then
            network_name = "contiv_orange"
-        else 
+        else
            if net_num == 1 then
               network_name = "contiv_yellow"
-           else 
+           else
               network_name = "contiv_green"
            end
         end
         config.vm.define node_name do |node|
-            node.vm.box_version = "0.3.1"
-
-            # node.vm.hostname = node_name
             # create an interface for etcd cluster
             node.vm.network :private_network, ip: node_addr, virtualbox__intnet: "true", auto_config: false
             # create an interface for bridged network
@@ -141,38 +181,64 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             node.vm.synced_folder ".", "/import", rsync: true
 
             node.vm.provision "shell" do |s|
-                s.inline = "echo '#{node_ips[0]} netmaster' >> /etc/hosts; echo '#{node_addr} #{node_name}' >> /etc/hosts"
+                s.inline = "echo '#{node_ips[0]} netmaster' >> /etc/hosts; echo '#{node_ips[1]} netmaster' >> /etc/hosts;	echo '#{node_addr} #{node_name}' >> /etc/hosts"
             end
             node.vm.provision "shell" do |s|
-                s.inline = provision_common
-                s.args = [node_name, ENV["CONTIV_NODE_OS"] || "", node_addr, ENV["http_proxy"] || "", ENV["https_proxy"] || "", ENV["USE_RELEASE"] || "", *ENV['CONTIV_ENV'],$cluster_ip_nodes]
+                s.inline = provision_common_once
+                s.args = [node_name, node_addr, cluster_ip_nodes, ENV["http_proxy"] || "", ENV["https_proxy"] || "", ENV["USE_RELEASE"] || "", ENV["CONTIV_CLUSTER_STORE"] || "etcd://localhost:2379", ENV["CONTIV_DOCKER_VERSION"] || "", ENV['CONTIV_NODE_OS'] || "", *ENV['CONTIV_ENV']]
             end
+            node.vm.provision "shell", run: "always" do |s|
+                s.inline = provision_common_always
+                s.args = [node_name, node_addr]
+            end
+
 provision_node = <<SCRIPT
-## start etcd with generated config
 set -x
-(nohup etcd --name #{node_name} --data-dir /tmp/etcd \
+
+## start etcd with generated config
+echo "#!/bin/bash" > /usr/bin/etcd.sh
+echo "etcd --name #{node_name} --data-dir /var/lib/etcd \
+ -heartbeat-interval=100 -election-timeout=5000 \
  --listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001 \
  --advertise-client-urls http://#{node_addr}:2379,http://#{node_addr}:4001 \
  --initial-advertise-peer-urls http://#{node_addr}:2380,http://#{node_addr}:7001 \
  --listen-peer-urls http://#{node_addr}:2380 \
- --initial-cluster #{node_peers.join(",")} --initial-cluster-state new \
-  0<&- &>/tmp/etcd.log &) || exit 1
+ --initial-cluster #{node_peers.join(",")} --initial-cluster-state new" >> /usr/bin/etcd.sh
+
+chmod +x /usr/bin/etcd.sh
+cp /opt/data/etcd.service /etc/systemd/system/etcd.service
 
 ## start consul
-(nohup consul agent -server #{consul_join_flag} #{consul_bootstrap_flag} \
- -bind=#{node_addr} -data-dir /opt/consul 0<&- &>/tmp/consul.log &) || exit 1
+echo "#!/bin/bash" > /usr/bin/consul.sh
+echo "consul agent -server #{consul_join_flag} #{consul_bootstrap_flag} \
+ -bind=#{node_addr} -data-dir /opt/consul" >> /usr/bin/consul.sh
 
-# start swarm
-(nohup /opt/bin/start-swarm.sh #{node_addr} #{swarm_flag}> /tmp/start-swarm.log &) || exit 1
+chmod +x /usr/bin/consul.sh
+cp /opt/data/consul.service /etc/systemd/system/consul.service
+  
+systemctl daemon-reload || exit 1
+systemctl enable etcd || exit 1
+systemctl enable consul || exit 1
+systemctl start etcd || exit 1
+systemctl start consul || exit 1
+
+if [ $1 == 0 ]
+then
+	# start netplugin
+	PYTHONIOENCODING=utf-8 /opt/bin/startPlugin.py -binpath /opt/bin -nodes $CLUSTER_NODE_IPS
+	PYTHONIOENCODING=utf-8 /opt/bin/startSwarm.py -binpath /opt/bin -nodes $CLUSTER_NODE_IPS
+fi
 
 SCRIPT
-            node.vm.provision "shell", run: "always" do |s|
+            node.vm.provision "shell" do |s|
                 s.inline = provision_node
+								s.args = [n]
             end
 
             # forward netmaster port
             if n == 0 then
                 node.vm.network "forwarded_port", guest: 9999, host: 9999
+                node.vm.network "forwarded_port", guest: 80, host: 9998
             end
         end
     end

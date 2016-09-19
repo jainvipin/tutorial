@@ -1,5 +1,0 @@
-#!/bin/bash
-
-echo restarting services...
-cd /opt/bin && PYTHONIOENCODING=utf-8 ./startPlugin.py -nodes ${CLUSTER_NODE_IPS}
-
